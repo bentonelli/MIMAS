@@ -10,7 +10,7 @@ initialize_MIBM <- function(num_pulls,breeding_file,nonbreeding_file,speed_mean_
                             bear_err_sd_s,bear_err_mean_f,bear_err_sd_f,
                             max_energy_s,max_energy_f,recovery_rate_s,
                             recovery_rate_f,season,start_date,goal_radius,
-                            migr_con=0,mig_con_type=0,migr_timing_lat_s=0,
+                            migr_con=0,migr_timing_lat_s=0,
                             migr_timing_lat_f=0){
   
   ### Create Static DF - This dataframe contains information for the simulations
@@ -40,7 +40,7 @@ initialize_MIBM <- function(num_pulls,breeding_file,nonbreeding_file,speed_mean_
     
     rand_lat_long$long_trans <- ebird_lat_long_tran(rand_lat_long$longitude,rand_lat_long$lat_trans)[,1]
     rand_lat_long$lat_trans <- ebird_lat_long_tran(rand_lat_long$longitude,rand_lat_long$lat_trans)[,2]
-
+    
     save_points <- as.matrix(rand_lat_long[,3:4])
     
     matched_points <-cbind(matched_points,save_points)
@@ -64,56 +64,57 @@ initialize_MIBM <- function(num_pulls,breeding_file,nonbreeding_file,speed_mean_
   colnames(matched_points)[4] <- "nonbreeding_lon"
   colnames(matched_points)[5] <- "nonbreeding_lat"
   
-  # This is where migratory connectivity comes in. Here, migratory connectivity
-  # is modeled to be a function of latitude, that is, birds breeding father north
-  # are more likely to breed further south (leapfrog migration, type 1). Or alternatively,
-  # those breeding farther north are more likely to winter farther north (type 2).
-  # However, this  section could be adapted in a number of ways to take into account different
-  # types of connectivity. 
+  # This is where migratory connectivity comes in. Migratory connectivity is modeled
+  # here as a function of the distance between breeding and non-breeding points.
+  # Ultimately, two types of migr. connectivity are modeled - chain migration (-1) and leapfrog (1)
+  # Random assortment exists at the center of "perfect" leapfrog and chain migration
   
-  if (mig_con_type == 1){
-    nb_ranks <- 1:num_pulls
-    probs <- (nb_ranks/num_pulls)*mig_con
-    
-    #Add noise
-    new_ind <- rnorm(num_pulls,0,1-mig_con)
-    new_ind <- rank(probs+new_ind)
-    
-    #Rank whole df breeding latitudes
-    matched_points <- matched_points[order(matched_points$breeding_lat,decreasing=TRUE),]
-    
-    #Then order non-breeding latitudes,longitudes
-    nb_loc <- matched_points[,4:5]
-    nb_loc <- nb_loc[order(nb_loc$nonbreeding_lat,decreasing=FALSE),]
-    #Now match based on new_ind
-    nb_loc <- cbind(nb_loc$nonbreeding_lon[new_ind],nb_loc$nonbreeding_lat[new_ind])
-    matched_points[,4:5] <- nb_loc
-    
-    #Revert sorting to ID
-    matched_points <- matched_points[order(matched_points$ID,decreasing=FALSE),]
-  } else if (mig_con_type == 2) {
-    
-    nb_ranks <- 1:num_pulls
-    probs <- (nb_ranks/num_pulls)*mig_con
-    
-    #Add noise
-    new_ind <- rnorm(num_pulls,0,1-mig_con)
-    new_ind <- rank(probs+new_ind)
-    
-    #Rank whole df breeding latitudes
-    matched_points <- matched_points[order(matched_points$breeding_lat,decreasing=TRUE),]
-    
-    #Then order non-breeding latitudes,longitudes
-    nb_loc <- matched_points[,4:5]
-    nb_loc <- nb_loc[order(nb_loc$nonbreeding_lat,decreasing=TRUE),]
-    #Now match based on new_ind
-    nb_loc <- cbind(nb_loc$nonbreeding_lon[new_ind],nb_loc$nonbreeding_lat[new_ind])
-    matched_points[,4:5] <- nb_loc
-    
-    #Revert sorting to ID
-    matched_points <- matched_points[order(matched_points$ID,decreasing=FALSE),]
+  #Get distances in km
+  ll_b <- matched_points[,2:3]
+  ll_nb <- matched_points[,4:5]
+  
+  distance_matrix <- distm(ll_b,ll_nb)/1000
+  
+  #Get average distance of all breeding points to all other non-breeding points
+  dist_avg_points <- rowMeans(distance_matrix)
+  
+  if(mig_con < 0){
+    #Rank where the values with largest values get highest priority - chain
+    rnk_type <- rank(-dist_avg_points,ties.method = "random")
+  } else {
+    #Rank where the values with largest values get lowest priority - leapfrog
+    rnk_type <- rank(dist_avg_points,ties.method = "random")
   }
   
+  #Convert ranks, add noise
+  rank_adj <- (rnk_type/length(dist_avg_points))*abs(mig_con) + rnorm(length(dist_avg_points),0,1-abs(mig_con))
+  
+  #Set final priority ranks
+  fin_ranks <- rank(rank_adj)
+  
+  #For each point, get best available match
+  match_list <- c()
+  for (nn in 1:length(dist_avg_points)){
+    ind_by_rank <- which(fin_ranks == nn)
+    #Get costs for all points
+    min_match <- min(distance_matrix[ind_by_rank,],na.rm=TRUE)
+    min_ind <- which(distance_matrix[ind_by_rank,]==min_match)
+    
+    ml_add <- c(ind_by_rank,min_ind)
+    match_list <- rbind(match_list,ml_add)
+    #NA out col
+    distance_matrix[,min_ind] <- NA
+  }
+  #save memory
+  distance_matrix <- NULL
+  
+  sort_br_p <- ll_b[match_list[,1],]
+  sort_nb_p <- ll_nb[match_list[,2],]
+  
+  #Rescramble points in order to make sure theres no corr with ID and location
+  rand_sort_ind <- sample(1:num_pulls)
+  matched_points[,2:3] <- sort_br_p[rand_sort_ind,]
+  matched_points[,4:5] <- sort_nb_p[rand_sort_ind,]
   
   # Assign parameter values for all. Note that these are unchanging and do not
   # vary by individual, unless otherwise noted (see departure timing)
@@ -143,18 +144,28 @@ initialize_MIBM <- function(num_pulls,breeding_file,nonbreeding_file,speed_mean_
   # Here, if migration start timing varies by latitude, with birds at higher breeding 
   # latitudes initiating flight earlier, we adjust reorder these start dates
   
-  if (migr_timing_lat_f > 0 | migr_timing_lat_s > 0){
+  if (migr_timing_lat_f != 0 | migr_timing_lat_s != 0){
     ranks <- 1:num_pulls
     
-    probs_s <- (ranks/num_pulls)*migr_timing_lat_s
-    probs_f <- (ranks/num_pulls)*migr_timing_lat_f
+    probs_s <- (ranks/num_pulls)*abs(migr_timing_lat_s)
+    probs_f <- (ranks/num_pulls)*abs(migr_timing_lat_f)
     
     #Draw ranks for spring, fall
-    new_ind_s <- rnorm(num_pulls,0,1-migr_timing_lat_s)
-    new_ind_s <- rank(probs_s+new_ind_s)
+    new_ind_s <- rnorm(num_pulls,0,1-abs(migr_timing_lat_s))
     
-    new_ind_f <- rnorm(num_pulls,0,1-migr_timing_lat_f)
-    new_ind_f <- rank(probs_f+new_ind_f)
+    if (migr_timing_lat_s > 0){
+      new_ind_s <- rank(probs_s+new_ind_s)
+    } else {
+      new_ind_s <- rank(-(probs_s+new_ind_s))
+    }
+    
+    new_ind_f <- rnorm(num_pulls,0,1-abs(migr_timing_lat_f))
+    if (migr_timing_lat_f > 0){
+      new_ind_f <- rank(probs_f+new_ind_f)
+    } else {
+      new_ind_f <- rank(-(probs_f+new_ind_f))
+      
+    }
     
     #Rank whole df breeding latitudes
     matched_points <- matched_points[order(matched_points$breeding_lat,decreasing=TRUE),]
@@ -333,8 +344,8 @@ get_speeds <- function(speeds_mean,speeds_sd,energy,distances_to_goal){
   
   #If the speed is more than the distance the bird needs to fly, correct to that distance.
   # This stops birds from continually overshooting their target
-  todays_speed[which(todays_speed > distances_to_goal)] <- distances_to_goal[which(todays_speed > energy)]
-  
+  todays_speed[which(todays_speed > distances_to_goal)] <- 
+    distances_to_goal[which(todays_speed > distances_to_goal)]
   return(todays_speed)
 }
 
@@ -388,16 +399,16 @@ move_bird <- function(current_migrants_to_move){
     
     #Get current locations
     current_locations <- cbind(current_migrants_to_move$current_lon,current_migrants_to_move$current_lat)
-
+    
     #Get goal locations
     goal_locations <- cbind(current_migrants_to_move$goal_lon,current_migrants_to_move$goal_lat)
     
     #Pull ideal bearing
     ideal_bearings <- bearingRhumb(current_locations,goal_locations)
-
-    #Pull distance to goal
-    distances_to_goal <- distRhumb(current_locations,goal_locations)
-
+    
+    #Pull distance to goal, convert to km
+    distances_to_goal <- distRhumb(current_locations,goal_locations)/1000
+    
     #Get speeds
     speeds <- current_migrants_to_move$speed_mean
     speeds_sd <- current_migrants_to_move$speed_sd
@@ -405,29 +416,29 @@ move_bird <- function(current_migrants_to_move){
     
     #Get speeds in km, convert to meters
     todays_speeds <- get_speeds(speeds,speeds_sd,energy,distances_to_goal)
-
+    
     #Pull bearing w/ error
     todays_bearing_errors <- rnorm(nrow(current_migrants_to_move),
                                    mean = current_migrants_to_move$bear_err_u, 
                                    sd = current_migrants_to_move$bear_err_sd)
-
+    
     # Now, each bird will attempt to fly. Some birds will end their flights over water. 
     # We assume no water landings for our landbirds, instead we check whether the flight ended
     # over water and redo the calculations for that flight. There are various possibilities
     # for how to parameterize this, but I have chosen to start with the assumption that a bird
     # would not initiate a flight that would end over water, and
     new_locations <- suppressWarnings(destPointRhumb(current_locations,(ideal_bearings+todays_bearing_errors),todays_speeds*1000))
-
+    
     #Check which are overwater
     on_water <- over_water(new_locations)
-
+    
     #Create df for the current locations, new locations, and the energy cost. Note that each bird gets a new record, and 
     # because some birds will end over water (See below) their "new location" will need to be their current location
     flight_record <- as.data.frame(cbind(current_migrants_to_move$ID,
                                          current_migrants_to_move$current_lon,
                                          current_migrants_to_move$current_lat,
                                          new_locations[,1],new_locations[,2],todays_speeds,on_water))
-
+    
     colnames(flight_record)[1:7] <- c("ID","current_lon","current_lat","new_lon","new_lat","dist","water")
     
     #Give flight record a stopover index 
@@ -446,7 +457,7 @@ move_bird <- function(current_migrants_to_move){
     
     #Only run if some birds are over water
     if (nrow(over_water_migrants) > 0){
-
+      
       #I am now setting up this section to do all the calculations at once, rather
       # than having it run in a loop. My hope is that this will greatly shorten
       # the runtime for this section
@@ -469,7 +480,7 @@ move_bird <- function(current_migrants_to_move){
       
       #Pull distance to goal
       distances_to_goal <- distRhumb(cbind(over_water_migrants_rep$current_lon,over_water_migrants_rep$current_lat),
-                                     cbind(over_water_migrants_rep$goal_lon,over_water_migrants_rep$goal_lat))
+                                     cbind(over_water_migrants_rep$goal_lon,over_water_migrants_rep$goal_lat))/1000
       
       #Get speeds
       speeds <- over_water_migrants_rep$speed_mean * over_water_migrants_rep$water_mult
@@ -538,7 +549,7 @@ move_bird <- function(current_migrants_to_move){
     current_migrants_to_move[replace_index,c("energy")] <- current_migrants_to_move[replace_index,c("energy")] - flight_record[,"dist"]
     current_migrants_to_move[replace_index,c("stopover_counter")] <- flight_record[,c("stopover_counter")]
   }
-
+  
   #Return updated bird records
   return(current_migrants_to_move)
 }
@@ -751,7 +762,7 @@ model_w_error <- function(initial_dfs,start_date,grid_size,err_grid,modeled_area
         birdcounts_comb$comb_e <- birdcounts_comb$comb_e/nrow(birdcounts_comb)
         
         bc_err_list[[week_count]] <- birdcounts_comb 
-
+        
         week_error <- sum(abs(birdcounts_comb$perc_pop - birdcounts_comb$count))/sum(birdcounts_comb$err_adj)
         week_error_record[week_count] <- week_error
         
@@ -806,22 +817,23 @@ best_models <- function(sim_output_loc, perc_plus,total_sims){
 
 # This analysis function creates a pdf and csv file demonstrating the convergence 
 # (or lack therof) of each parameter.
-param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"/",run_date,sep=""),
+param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep=""),
                            num_sims_in_file=100,total_sims = 100000,buffer = .03){
   library(dplyr)
   library(ggplot2)
   library(readr)
   
-  s1_loc <- paste("data/training_runs/",spec_abr,"/",run_date,"/Step_1/*.csv",sep="")
-  s2_loc <- paste("data/training_runs/",spec_abr,"/",run_date,"/Step_2/*.csv",sep="")
+  s1_loc <- paste("data/training_runs/",spec_abr,"_",run_date,"/S1/*.csv",sep="")
+  s2_loc <- paste("data/training_runs/",spec_abr,"_",run_date,"/S2/*.csv",sep="")
   #Read in first fit parameter set
   step1_param_set <- lapply(Sys.glob(s1_loc), read.csv)
   step1_compiled_df <- do.call(bind_rows,step1_param_set[1:(total_sims/num_sims_in_file)])
+  step1_compiled_df <- step1_compiled_df[complete.cases(step1_compiled_df),]
   
   # Read in second fit information into single dataframe, then process and analyze
   step2_param_set <- lapply(Sys.glob(s2_loc), read.csv)
   step2_compiled_df <- do.call(bind_rows,step2_param_set[1:(total_sims/num_sims_in_file)])
-  
+  step2_compiled_df <- step2_compiled_df[complete.cases(step2_compiled_df),]
   #Get best of the second step runs
   perc_lim_plus <- quantile(step2_compiled_df$sum_err,probs = c(.01)) *(1+buffer)
   one_perc_plus_sims <- step2_compiled_df[which(step2_compiled_df$sum_err<=perc_lim_plus),]
@@ -831,17 +843,17 @@ param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spe
       height = 4) # The height of the plot in inches
   
   param_convergence_rec <- c()
-  for (n in 2:26){
-    set_range <- density(step1_compiled_df[,n])
+  for (n in 2:25){
+    set_range <- density(step1_compiled_df[,n],na.rm = TRUE)
     xx_max <- max(set_range$x)
     xx_min <- min(set_range$x)
-    set_bw <- density(one_perc_plus_sims[,n])
+    set_bw <- density(one_perc_plus_sims[,n],na.rm = TRUE)
     set_bw <- set_bw$bw
     
     #Get 95% range estimate for each stage of the fitting process
-    og_range <- abs(quantile(step1_compiled_df[,n],probs=c(.055)) - quantile(step1_compiled_df[,n],probs=c(.945)))
-    first_range <- abs(quantile(step2_compiled_df[,n],probs=c(.055)) - quantile(step2_compiled_df[,n],probs=c(.945)))
-    second_range <- abs(quantile(one_perc_plus_sims[,n],probs=c(.055)) - quantile(one_perc_plus_sims[,n],probs=c(.945)))
+    og_range <- abs(quantile(step1_compiled_df[,n],probs=c(.025)) - quantile(step1_compiled_df[,n],probs=c(.975)))
+    first_range <- abs(quantile(step2_compiled_df[,n],probs=c(.025)) - quantile(step2_compiled_df[,n],probs=c(.975)))
+    second_range <- abs(quantile(one_perc_plus_sims[,n],probs=c(.025)) - quantile(one_perc_plus_sims[,n],probs=c(.975)))
     
     #Get the total convergence from the first to last step
     tot_range_convergence <- 1- (second_range/og_range)
@@ -851,8 +863,8 @@ param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spe
     median_est_s1 <- median(step2_compiled_df[,n])
     
     median_est_s2 <- median(one_perc_plus_sims[,n])
-    lower_est <- quantile(one_perc_plus_sims[,n],probs=c(.055)) 
-    upper_est <- quantile(one_perc_plus_sims[,n],probs=c(.945)) 
+    lower_est <- quantile(one_perc_plus_sims[,n],probs=c(.025)) 
+    upper_est <- quantile(one_perc_plus_sims[,n],probs=c(.975)) 
     
     add_v <- c(colnames(one_perc_plus_sims)[n],og_range,first_range,second_range,
                median_est_prior,median_est_s1,median_est_s2,lower_est,upper_est,
@@ -865,29 +877,33 @@ param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spe
   }
   dev.off()
   colnames(param_convergence_rec) <- c("param_name","prior range","S1 range","S2 range",
-                                       "prior med. est","S1 med. est.","S2 med. est","5.5%",
-                                       "94.5%","% Converg.")
+                                       "prior med. est","S1 med. est.","S2 med. est","2.5%",
+                                       "97.5%","% Converg.")
   param_convergence_rec <- as.data.frame(param_convergence_rec)
-  write_csv(param_convergence_rec,paste(paste("data/output/",spec_abr,"/",run_date,"/param_convergence.csv",sep="")))
+  write_csv(param_convergence_rec,paste(paste("data/output/",spec_abr,"_",run_date,"/param_convergence.csv",sep="")))
 }
 
 #Code that extracts parameter sets associated with the best simulation runs
-best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"/",run_date,sep=""),
-                      output_loc2 = paste("data/param_sets/",spec_abr,"/",run_date,sep=""),num_sims_in_file=100,total_sims = 100000,buffer = .03){
+best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep=""),
+                      output_loc2 = paste("data/param_sets/",spec_abr,"/",run_date,sep=""),
+                      num_sims_in_file=100,total_sims = 100000,buffer = .03){
   library(dplyr)
+  print(paste(output_loc,"/",spec_abr,"_best.rds",sep=""))
+  print(paste(output_loc2,"/",spec_abr,"_S2.rds",sep=""))
+  
   #If output folder doesn't exist, create one
   if(!dir.exists(paste("data/output/",spec_abr,sep=""))){
     dir.create(paste("data/output/",spec_abr,sep=""))
   }
   
   #If output folder doesn't exist, create one
-  if(!dir.exists(paste("data/output/",spec_abr,"/",run_date,sep=""))){
-    dir.create(paste("data/output/",spec_abr,"/",run_date,sep=""))
+  if(!dir.exists(paste("data/output/",spec_abr,"_",run_date,sep=""))){
+    dir.create(paste("data/output/",spec_abr,"_",run_date,sep=""))
   }
   
   #Location of saved simulation files
-  sims_location <- paste("data/training_runs/",spec_abr,"/",run_date,"/Step_2/*.csv",sep="")
-
+  sims_location <- paste("data/training_runs/",spec_abr,"_",run_date,"/S2/*.csv",sep="")
+  
   #Define buffer for error - here set to 3%
   sim_best_models <- best_models(sims_location,buffer,total_sims)
   
@@ -898,20 +914,20 @@ best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr
 }
 
 #Code to create parameter correlation plot
-param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"/",run_date,sep="")){
+param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep="")){
   # Script to compare parameter correlations across best fit models
   library(corrplot)
   
   #If output folder doesn't exist, create one
-  if(!dir.exists(paste("data/output/",spec_abr,"/",run_date,sep=""))){
-    dir.create(paste("data/output/",spec_abr,"/",run_date,sep=""))
+  if(!dir.exists(paste("data/output/",spec_abr,"_",run_date,sep=""))){
+    dir.create(paste("data/output/",spec_abr,"_",run_date,sep=""))
   }
   
   #Read in parameter set
-  fit_params <- readRDS(paste("data/output/",spec_abr,"/",run_date,"/",spec_abr,"_best.rds",sep=""))
+  fit_params <- readRDS(paste("data/output/",spec_abr,"_",run_date,"/",spec_abr,"_best.rds",sep=""))
   
   plot(fit_params$speed_mean_s,fit_params$start_date_u_s,cex=.1)
-  wanted_corr_params <- as.matrix(fit_params[,2:26])
+  wanted_corr_params <- as.matrix(fit_params[,2:25])
   cor_data <- round(cor(wanted_corr_params),2)
   
   #Remove NA rows
@@ -951,9 +967,13 @@ recombine <- function(spec_abr,run_date,output_loc=paste("data/param_sets/",spec
   output_loc_adj <- paste(output_loc,"/",spec_abr,"_S1.rds",sep = "")
   
   #Set location of simulation files
-  training_files <- lapply(Sys.glob(paste("data/training_runs/",spec_abr,"/",run_date,"/Step_1/*.csv",sep="")), read.csv)
+  training_files <- lapply(Sys.glob(paste("data/training_runs/",spec_abr,"_",run_date,"/S1/*.csv",sep="")), read.csv)
   
   compiled_df <- do.call(bind_rows,training_files)
+  
+  #If there was an issue with a simulation causing and NA, remove those here
+  
+  compiled_df <- compiled_df[complete.cases(compiled_df),]
   
   # Do to some simulations failing, the number of actual simulations likely exceeds
   # the number wanted/required. Here, this code truncates to the first ### of simulations
@@ -969,12 +989,12 @@ recombine <- function(spec_abr,run_date,output_loc=paste("data/param_sets/",spec
   spring_weeks <- all_weeks[!all_weeks %in% fall_weeks]
   #Calculate error terms for spring, fall
   #Split and sum error for 2 sections of the year, weeks 1:26, and 27:52
-  err_all <-  compiled_df[1:nrow(compiled_df),29:80]
+  err_all <-  compiled_df[1:nrow(compiled_df),28:79]
   err_s <- rowSums(err_all[,spring_weeks])
   err_f <- rowSums(err_all[,fall_weeks])
   
   #add to df, cut weekly error
-  compiled_df <- compiled_df[,1:28]
+  compiled_df <- compiled_df[,1:27]
   compiled_df$err_spring <- err_s
   compiled_df$err_fall <- err_f
   
@@ -987,9 +1007,9 @@ recombine <- function(spec_abr,run_date,output_loc=paste("data/param_sets/",spec
   # Run the recombination step - take fall and spring model parameter sets, and combine
   # them to create a list of simulation parameter sets. Because there are a large number 
   # of potential combinations, this process can be done randomly
-  fall_param_inx <- c(4,5,8,9,11,14,15,17,19,26)
-  spring_param_inx <- c(2,3,6,7,10,12,13,16,18,25)
-  shared_inx <- c(20,21,22,23,24)
+  fall_param_inx <- c(4,5,8,9,11,14,15,17,19,25)
+  spring_param_inx <- c(2,3,6,7,10,12,13,16,18,24)
+  shared_inx <- c(20,21,22,23)
   colnames(top_f_models)[fall_param_inx]
   colnames(top_s_models)[spring_param_inx]
   colnames(top_f_models)[shared_inx]
@@ -1004,13 +1024,18 @@ recombine <- function(spec_abr,run_date,output_loc=paste("data/param_sets/",spec
   saveRDS(three_batch_out,output_loc_adj)
 }
 
-derived_params <- function(file_loc){
+derived_params <- function(param_file,path = TRUE){
   #Script to get derived parameters - mean speed km/day and recovery rate, km/day
+  # 8-26-22: Adding combined migratory connectivity and strength 
   library(truncnorm)
-
-    #Read in final parameter set
-  param_set <- readRDS(file_loc)
-
+  
+  if (path){
+    #Read in parameter set
+    param_set <- readRDS(param_file)
+  } else {
+    param_set <- param_file
+  }
+  
   ### Spring ####
   speed_theor_weighted <- c()
   prob_theor <- c()
@@ -1049,6 +1074,63 @@ derived_params <- function(file_loc){
   rec_rate_f <- (param_set$max_energy_f*param_set$recovery_rate_f)
   rec_rate_s <- (param_set$max_energy_s*param_set$recovery_rate_s)
   
-  return(list(spring_speed_adj,fall_speed_adj,rec_rate_s,rec_rate_f))
-
+  # Migratory connectivity type x strength - OBSOLETE 9/20/21
+  # First converts type to -1,1, then multiplies to get continuous gradient
+  #mig_con_str <- param_set$mig_con * ((param_set$mig_con_type - 1.5)*2)
+  
+  
+  r_list <- list(spring_speed_adj,fall_speed_adj,rec_rate_s,rec_rate_f,mig_con_str)
+  names(r_list) <- c("spring_speed_adj","fall_speed_adj",
+                     "rec_rate_s","rec_rate_f","mig_con_str")
+  return(r_list)
+  
 }
+
+#The function below is adapted from the function of the same name in the currently
+#broken package, BEST
+postPriorOverlap <-
+  function( paramSampleVec, prior, ..., yaxt="n", ylab="",
+            xlab="Parameter", main="", cex.lab=1.5, cex=1.4,
+            xlim=range(paramSampleVec), breaks=NULL,
+            mainColor="dodgerblue4", priorColor="grey", overlapColor="tan4") {
+    
+    # Does a posterior histogram for a single parameter, adds the prior,
+    #   displays and calculates the overlap.
+    # Returns the overlap.
+    
+    oldpar <- par(xpd=NA) ; on.exit(par(oldpar))
+    
+    # get breaks: a sensible number over the hdi; cover the full range (and no more);
+    #   equal spacing.
+    if (is.null(breaks)) {
+      nbreaks <- ceiling(diff(range(paramSampleVec)) / as.numeric(diff(hdi(paramSampleVec))/18))
+      breaks <- seq(from=min(paramSampleVec), to=max(paramSampleVec), length.out=nbreaks)
+    }
+    # plot posterior histogram.
+    histinfo <- hist(paramSampleVec, xlab=xlab, yaxt=yaxt, ylab=ylab,
+                     freq=FALSE, border='white', col=mainColor,
+                     xlim=xlim, main=main, cex=cex, cex.lab=cex.lab,
+                     breaks=breaks)
+    
+    if (is.numeric(prior))  {
+      # plot the prior if it's numeric
+      priorInfo <- hist(prior, breaks=c(-Inf, breaks, Inf), add=TRUE,
+                        freq=FALSE, col=priorColor, border='white')$density[2:length(breaks)]
+    } else if (is.function(prior)) {
+      if(class(try(prior(0.5, ...), TRUE)) == "try-error")
+        stop(paste("Incorrect arguments for the density function", substitute(prior)))
+      priorInfo <- prior(histinfo$mids, ...)
+    }
+    # get (and plot) the overlap
+    minHt <- pmin(priorInfo, histinfo$density)
+    rect(breaks[-length(breaks)], rep(0, length(breaks)-1), breaks[-1], minHt, col=overlapColor,
+         border='white')
+    overlap <- sum(minHt * diff(histinfo$breaks))
+    # Add curve if prior is a function
+    if (is.function(prior))
+      lines(histinfo$mids, priorInfo, lwd=2, col=priorColor)
+    # Add text
+    text(mean(breaks), 0, paste0("overlap = ", round(overlap*100), "%"), pos=3, cex=cex)
+    
+    return(overlap)
+  }

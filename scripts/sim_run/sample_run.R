@@ -45,8 +45,13 @@ weekly_modeled <- readRDS(paste("data/species_maps/modeled_area_maps//",gsub(" "
 #Define starting season
 season <- 1
 
-#This is the Julian date for May 28th.
-start_date <- 148
+start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),7:8])
+start_date <- as.numeric(start_date[1] + (start_date[2]-start_date[1])/2)
+start_date <- yday(as.Date(start_date,origin = "1970-01-01"))
+acceptable_week_dates <- seq(1,365,by=7)
+start_date <- acceptable_week_dates[which(abs(acceptable_week_dates - start_date) == min(abs(acceptable_week_dates - start_date)))]
+print(start_date)
+
 
 #Initialize model
 initial_dfs <- initialize_MIBM(num_pulls,breeding_file,nonbreeding_file,speed_mean_s,

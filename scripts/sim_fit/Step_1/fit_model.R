@@ -32,6 +32,14 @@ spacing <- 200
 #Define starting season
 season <- 1
 
+#Set the Julian date based on the middle f the breeding season, as defined by eBird
+start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),7:8])
+start_date <- as.numeric(start_date[1] + (start_date[2]-start_date[1])/2)
+start_date <- yday(as.Date(start_date,origin = "1970-01-01"))
+acceptable_week_dates <- seq(1,365,by=7)
+start_date <- acceptable_week_dates[which(abs(acceptable_week_dates - start_date) == min(abs(acceptable_week_dates - start_date)))]
+print(start_date)
+
 #This is the Julian date of the start date for simulations
 start_date <- 162
 
@@ -55,7 +63,7 @@ for (each_sim in 1:num_simulations){
   print(each_sim)
   
   #Parameter sets are drawn from a script in the data folder
-  source(file = "data/param_sets/Varied_Thrush_3_10_22.R")
+  source(file = "data/param_sets/VATH/3_11_22/VATH_S0.R")
   
   #Initialize model
   initial_dfs <- initialize_MIBM(num_pulls,breeding_file,nonbreeding_file,speed_mean_s,

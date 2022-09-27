@@ -19,7 +19,7 @@ library(data.table)
 library(gifski)
 sf::sf_use_s2(FALSE)
 
-setwd("~/Documents/Coding/R/M-IBM")
+setwd("~/Documents/Coding/R/MIMAS/")
 
 #Get functions
 source(file = "scripts/sim_functions/sim_funct.R")
@@ -29,7 +29,7 @@ source(file = "scripts/sim_functions/sim_funct.R")
 #Script
 #source(file = "data/param_sets/Clay_colored_Sparrow_BG_3_1_22.R")
 #Fit Data
-param_set <- readRDS("data/param_sets/WOTH_M1/3_28_22/WOTH_M1_S2.rds")
+param_set <- readRDS("data/param_sets/WOTH_M1/8_21_22/WOTH_M1_S2.rds")
 for (each_var in 1:ncol(param_set)){
   #Random
   assign(colnames(param_set)[each_var],param_set[sample(1:nrow(param_set),1),each_var])
@@ -41,7 +41,7 @@ for (each_var in 1:ncol(param_set)){
 species_target <- "Wood Thrush"
 
 #Set number of birds to include in simulation
-num_pulls <- 2000
+num_pulls <- 1000
 
 #Define spacing of error maps
 spacing <- 200
@@ -59,7 +59,7 @@ weekly_modeled <- readRDS(paste("data/species_maps/modeled_area_maps//",gsub(" "
 #Define starting season
 season <- 1
 
-start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),8:9])
+start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),7:8])
 start_date <- as.numeric(start_date[1] + (start_date[2]-start_date[1])/2)
 start_date <- yday(as.Date(start_date,origin = "1970-01-01"))
 acceptable_week_dates <- seq(1,365,by=7)
@@ -77,6 +77,11 @@ initial_dfs <- initialize_MIBM(num_pulls,breeding_file,nonbreeding_file,speed_me
                                mig_con,mig_con_type,migr_timing_lat_s,migr_timing_lat_f)
 static_df <- initial_dfs[[1]]
 upd_df <- initial_dfs[[2]]
+plot(static_df$breeding_lat,static_df$nonbreeding_lat,cex=.1)
+plot(static_df$breeding_lon,static_df$nonbreeding_lon,cex=.1)
+plot(static_df$breeding_lat,static_df$start_date_f,cex=.1)
+plot(static_df$breeding_lat,static_df$start_date_s,cex=.1)
+
 locs_rec <- as.data.frame(matrix(NA,ncol = 4,nrow = (365*num_pulls)))
 colnames(locs_rec) <- c("ID","Lon","Lat","Day")
 for (days in 1:365){
@@ -125,6 +130,17 @@ p <- ggplot() + coord_map("mollweide",xlim=c(-140,-65),ylim=c(15,70)) +
   
   theme(panel.background = element_rect(fill = alpha("lightskyblue2",.5)))
 p
+
+sample_data <- filter(locs_rec,ID %in% 1:100, Day %in% 200:330)
+p2 <- p + geom_path(data=sample_data, aes(x=Lon, y=Lat, group=ID),color= alpha("tan",.2))
+
+p2
+
+sample_data <- filter(locs_rec,ID %in% 1:100, Day %in% 60:140)
+p3 <- p2 + geom_path(data=sample_data, aes(x=Lon, y=Lat, group=ID),color= alpha("forestgreen",.2))
+
+p3
+
 #Plot with points
 #Location of birds on a single day
 #loc_day <- filter(locs_rec,Day == 250)

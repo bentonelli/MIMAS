@@ -21,7 +21,7 @@ library(zoo)
 sf::sf_use_s2(FALSE)
 
 setwd("~/Documents/Coding/R/MIMAS/")
-
+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
 #Set seed
 set.seed(188)
 

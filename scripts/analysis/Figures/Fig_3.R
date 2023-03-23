@@ -282,8 +282,8 @@ p4 <-  ggplot() + coord_map("mollweide",xlim=c(-105,-65),ylim=c(5,50)) +
 p4 <- ggdraw(align_legend(p4))
 p4
 comb_plots <- ggpubr::ggarrange(p, p2, p3, p4 , 
-          #labels = c("A", "B", "C","D"),
-          ncol = 2, nrow = 2)
+                                #labels = c("A", "B", "C","D"),
+                                ncol = 2, nrow = 2)
 comb_plots
 #Use 1600px for width
 

@@ -10,7 +10,7 @@ initialize_MIBM <- function(num_pulls,breeding_file,nonbreeding_file,speed_mean_
                             bear_err_sd_s,bear_err_mean_f,bear_err_sd_f,
                             max_energy_s,max_energy_f,recovery_rate_s,
                             recovery_rate_f,season,start_date,goal_radius,
-                            migr_con=0,migr_timing_lat_s=0,
+                            migr_con=0,mig_con_type=0,migr_timing_lat_s=0,
                             migr_timing_lat_f=0){
   
   ### Create Static DF - This dataframe contains information for the simulations
@@ -72,7 +72,7 @@ initialize_MIBM <- function(num_pulls,breeding_file,nonbreeding_file,speed_mean_
   #Get distances in km
   ll_b <- matched_points[,2:3]
   ll_nb <- matched_points[,4:5]
-  
+    
   distance_matrix <- distm(ll_b,ll_nb)/1000
   
   #Get average distance of all breeding points to all other non-breeding points
@@ -786,19 +786,11 @@ model_w_error <- function(initial_dfs,start_date,grid_size,err_grid,modeled_area
 
 #This function takes in the updated daily dataframe, and returns a dataframe with just the
 # locations of the birds, day and their IDs
-save_locations <- function(updatable_df,save_season=FALSE,save_stopover=FALSE){
+save_locations <- function(updatable_df,save_season=FALSE){
   if (save_season){
-    if (save_stopover){
-      locations_IDs <- updatable_df %>% select(ID,current_lon,current_lat,day,season,stopover_counter)
-    } else {
-      locations_IDs <- updatable_df %>% select(ID,current_lon,current_lat,day,season)
-    }
+    locations_IDs <- updatable_df %>% select(ID,current_lon,current_lat,day,season)
   } else {
-    if (save_stopover){
-      locations_IDs <- updatable_df %>% select(ID,current_lon,current_lat,day,stopover_counter)
-    } else {
-      locations_IDs <- updatable_df %>% select(ID,current_lon,current_lat,day)
-    }
+    locations_IDs <- updatable_df %>% select(ID,current_lon,current_lat,day)
   }
   return(locations_IDs)
 }
@@ -851,7 +843,7 @@ param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spe
       height = 4) # The height of the plot in inches
   
   param_convergence_rec <- c()
-  for (n in 2:25){
+  for (n in 2:26){
     set_range <- density(step1_compiled_df[,n],na.rm = TRUE)
     xx_max <- max(set_range$x)
     xx_min <- min(set_range$x)
@@ -922,7 +914,7 @@ best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr
 }
 
 #Code to create parameter correlation plot
-param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep=""),return_matrix=FALSE){
+param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep="")){
   # Script to compare parameter correlations across best fit models
   library(corrplot)
   
@@ -934,26 +926,22 @@ param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_ab
   #Read in parameter set
   fit_params <- readRDS(paste("data/output/",spec_abr,"_",run_date,"/",spec_abr,"_best.rds",sep=""))
   
-  #plot(fit_params$speed_mean_s,fit_params$start_date_u_s,cex=.1)
-  wanted_corr_params <- as.matrix(fit_params[,c(2:9,12:19,23:25)])
+  plot(fit_params$speed_mean_s,fit_params$start_date_u_s,cex=.1)
+  wanted_corr_params <- as.matrix(fit_params[,2:26])
   cor_data <- round(cor(wanted_corr_params),2)
   
   #Remove NA rows
-  #cor_data <- cor_data[-as.numeric(which(rowSums(cor_data,na.rm=TRUE)==TRUE)),-as.numeric(which(rowSums(cor_data,na.rm=TRUE)==TRUE))]
+  cor_data <- cor_data[-as.numeric(which(rowSums(cor_data,na.rm=TRUE)==TRUE)),-as.numeric(which(rowSums(cor_data,na.rm=TRUE)==TRUE))]
   
   #Plot correlations. Note here that some parameters might be not be continuous,
   #so interpret with caution!
-  #corrplot(cor_data, method = 'color',order = 'AOE')
+  corrplot(cor_data, method = 'color',order = 'AOE')
   
   pdf(file = paste(output_loc,"/",spec_abr,"_correlation.pdf",sep=""),   # The directory you want to save the file in
       width = 8, # The width of the plot in inches
       height = 8) # The height of the plot in inches
   corrplot(cor_data, method = 'color',order = 'AOE')
   dev.off()
-  
-  if(return_matrix){
-    return(cor_data)
-  }
   
 }
 
@@ -1001,12 +989,12 @@ recombine <- function(spec_abr,run_date,output_loc=paste("data/param_sets/",spec
   spring_weeks <- all_weeks[!all_weeks %in% fall_weeks]
   #Calculate error terms for spring, fall
   #Split and sum error for 2 sections of the year, weeks 1:26, and 27:52
-  err_all <-  compiled_df[1:nrow(compiled_df),28:79]
+  err_all <-  compiled_df[1:nrow(compiled_df),29:80]
   err_s <- rowSums(err_all[,spring_weeks])
   err_f <- rowSums(err_all[,fall_weeks])
   
   #add to df, cut weekly error
-  compiled_df <- compiled_df[,1:27]
+  compiled_df <- compiled_df[,1:28]
   compiled_df$err_spring <- err_s
   compiled_df$err_fall <- err_f
   
@@ -1019,9 +1007,9 @@ recombine <- function(spec_abr,run_date,output_loc=paste("data/param_sets/",spec
   # Run the recombination step - take fall and spring model parameter sets, and combine
   # them to create a list of simulation parameter sets. Because there are a large number 
   # of potential combinations, this process can be done randomly
-  fall_param_inx <- c(4,5,8,9,11,14,15,17,19,25)
-  spring_param_inx <- c(2,3,6,7,10,12,13,16,18,24)
-  shared_inx <- c(20,21,22,23)
+  fall_param_inx <- c(4,5,8,9,11,14,15,17,19,26)
+  spring_param_inx <- c(2,3,6,7,10,12,13,16,18,25)
+  shared_inx <- c(20,21,22,23,24)
   colnames(top_f_models)[fall_param_inx]
   colnames(top_s_models)[spring_param_inx]
   colnames(top_f_models)[shared_inx]
@@ -1086,14 +1074,14 @@ derived_params <- function(param_file,path = TRUE){
   rec_rate_f <- (param_set$max_energy_f*param_set$recovery_rate_f)
   rec_rate_s <- (param_set$max_energy_s*param_set$recovery_rate_s)
   
-  # Migratory connectivity type x strength - OBSOLETE 9/20/21
+  # Migratory connectivity type x strength 
   # First converts type to -1,1, then multiplies to get continuous gradient
-  #mig_con_str <- param_set$mig_con * ((param_set$mig_con_type - 1.5)*2)
+  mig_con_str <- param_set$mig_con * ((param_set$mig_con_type - 1.5)*2)
   
   
-  r_list <- list(spring_speed_adj,fall_speed_adj,rec_rate_s,rec_rate_f)
+  r_list <- list(spring_speed_adj,fall_speed_adj,rec_rate_s,rec_rate_f,mig_con_str)
   names(r_list) <- c("spring_speed_adj","fall_speed_adj",
-                     "rec_rate_s","rec_rate_f")
+                     "rec_rate_s","rec_rate_f","mig_con_str")
   return(r_list)
   
 }
@@ -1102,9 +1090,9 @@ derived_params <- function(param_file,path = TRUE){
 #broken package, BEST
 postPriorOverlap <-
   function( paramSampleVec, prior, ..., yaxt="n", ylab="",
-            xlab="", main="", cex.lab=1.7, cex=1.4, cex.axis=1.4,
+            xlab="Parameter", main="", cex.lab=1.5, cex=1.4,
             xlim=range(paramSampleVec), breaks=NULL,
-            mainColor="dodgerblue4", priorColor="grey30", overlapColor="saddlebrown") {
+            mainColor="dodgerblue4", priorColor="grey", overlapColor="tan4") {
     
     # Does a posterior histogram for a single parameter, adds the prior,
     #   displays and calculates the overlap.
@@ -1121,7 +1109,7 @@ postPriorOverlap <-
     # plot posterior histogram.
     histinfo <- hist(paramSampleVec, xlab=xlab, yaxt=yaxt, ylab=ylab,
                      freq=FALSE, border='white', col=mainColor,
-                     xlim=xlim, main=main, cex=cex, cex.lab=cex.lab,cex.axis=cex.axis,
+                     xlim=xlim, main=main, cex=cex, cex.lab=cex.lab,
                      breaks=breaks)
     
     if (is.numeric(prior))  {
@@ -1142,7 +1130,7 @@ postPriorOverlap <-
     if (is.function(prior))
       lines(histinfo$mids, priorInfo, lwd=2, col=priorColor)
     # Add text
-    #text(mean(breaks), 0, paste0("overlap = ", round(overlap*100), "%"), pos=3, cex=cex)
+    text(mean(breaks), 0, paste0("overlap = ", round(overlap*100), "%"), pos=3, cex=cex)
     
     return(overlap)
   }

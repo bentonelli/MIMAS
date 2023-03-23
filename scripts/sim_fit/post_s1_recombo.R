@@ -13,10 +13,10 @@ n_files <- 1000
 n_in_each <- 100
 
 #Set location to save file
-output_loc <- "data/fit_param_sets/WOTH_M2/Step_1/WOTH_M2_3_29_22.rds"
+output_loc <- "data/param_sets/BUOR/8_21_22/BUOR_S1.rds"
 
 #Set location of simulation files
-training_files <- lapply(Sys.glob("data/training_runs/Step_1/Wood_Thrush_M2/*.csv"), read.csv)
+training_files <- lapply(Sys.glob("data/training_runs/BRSP_8_21_22/S1/BRSP*.csv"), read.csv)
 
 compiled_df <- do.call(bind_rows,training_files)
 

@@ -1,6 +1,6 @@
 #Script to create output files for a training run. All output goes to designated 
 #output folder (created automatically) unless otherwise specified
-spec_abr <- "RNSA"
+spec_abr <- "VATH"
 run_date <- "9_20_22"
 
 #Get functions

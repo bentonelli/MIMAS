@@ -1,7 +1,7 @@
 #Fit parameters from recombined posteriors
 
 Sys.setenv(TZ='America/Los_Angeles')
-setwd("~/R/M-IBM/")
+setwd("~/R/MIMAS/")
 library(data.table)
 library(ggmap)
 library(ebirdst)
@@ -21,10 +21,10 @@ library(pryr)
 sf::sf_use_s2(FALSE)
 
 #Load in posterior of step 1
-posterior_params <- readRDS("data/param_sets/YBSA/4_10_22/YBSA_S1.rds")
+posterior_params <- readRDS("data/param_sets/BRSP/8_21_22/BRSP_S1.rds")
 
 # Determine names of output files
-file_name_start <- "YBSA_S2_4_10_22_"
+file_name_start <- "data/training_runs/BRSP_8_21_22/S2/BRSP_S2_8_21_22_"
 
 #Number of simulations to run
 num_simulations <- 100
@@ -33,7 +33,7 @@ num_simulations <- 100
 num_pulls <- 5000
 
 #Species name
-species_target <- "Yellow-bellied Sapsucker"
+species_target <- "Brewer's Sparrow"
 
 #Define spacing of error grid
 spacing <- 200

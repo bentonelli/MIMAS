@@ -74,7 +74,7 @@ initial_dfs <- initialize_MIBM(num_pulls,breeding_file,nonbreeding_file,speed_me
                                bear_err_sd_s,bear_err_mean_f,bear_err_sd_f,
                                max_energy_s,max_energy_f,recovery_rate_s,
                                recovery_rate_f,season,start_date,goal_radius,
-                               mig_con,mig_con_type,migr_timing_lat_s,migr_timing_lat_f)
+                               mig_con,migr_timing_lat_s,migr_timing_lat_f)
 static_df <- initial_dfs[[1]]
 upd_df <- initial_dfs[[2]]
 plot(static_df$breeding_lat,static_df$nonbreeding_lat,cex=.1)

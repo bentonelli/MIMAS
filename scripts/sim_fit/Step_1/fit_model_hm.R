@@ -20,7 +20,7 @@ library(sigmoid)
 
 sf::sf_use_s2(FALSE)
 
-setwd("~/R/M-IBM/")
+setwd("~/R/MIMAS/")
 
 #Number of simulations to run
 num_simulations <- 100
@@ -29,7 +29,9 @@ num_simulations <- 100
 num_pulls <- 1000
 
 #Species name
-species_target <- "Yellow-bellied Sapsucker"
+species_target <- "Bullock's Oriole"
+
+save_fl_header <- "data/training_runs/BUOR_8_21_22/S1/BUOR_S1_8_21_22_"
 
 #Define spacing of error grid
 spacing <- 200
@@ -38,7 +40,7 @@ spacing <- 200
 season <- 1
 
 #Set the Julian date based on the middle f the breeding season, as defined by eBird
-start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),8:9])
+start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),7:8])
 start_date <- as.numeric(start_date[1] + (start_date[2]-start_date[1])/2)
 start_date <- yday(as.Date(start_date,origin = "1970-01-01"))
 acceptable_week_dates <- seq(1,365,by=7)
@@ -65,7 +67,7 @@ for (each_sim in 1:num_simulations){
   print(each_sim)
   
   #Parameter sets are drawn from a script in the data folder
-  source(file = "data/param_sets/YBSA/4_10_22/YBSA_S0.R")
+  source(file = "data/param_sets/BUOR/8_21_22/BUOR_S0.R")
   
   #Initialize model
   initial_dfs <- initialize_MIBM(num_pulls,breeding_file,nonbreeding_file,speed_mean_s,
@@ -109,7 +111,7 @@ colnames(err_record) <- c("speed_mean_s","speed_sd_s","speed_mean_f","speed_sd_f
 
 #Combine parameter sets with weekly error sets, write to CSV
 err_record <- cbind(err_record,error_run_list)
-fn <- paste("YBSA_S1_4_10_22_",ceiling(runif(1,1,99999999)),".csv",sep="")
+fn <- paste(save_fl_header,ceiling(runif(1,1,99999999)),".csv",sep="")
 write.csv(err_record,fn)
 
 

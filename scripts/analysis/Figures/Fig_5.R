@@ -18,7 +18,7 @@ for (all_spec in flc_all){
   training_files <- lapply(Sys.glob(paste("data/training_runs/",four_letter_code,"_",run_date,"/S1/*.csv",sep="")), read.csv)
   compiled_df <- do.call(bind_rows,training_files)
   
-  final_sim_set <- readRDS(paste("data/output/",four_letter_code,"_",run_date,"/",four_letter_code,"_best.rds",sep=""))
+  final_sim_set <- readRDS(paste("data/output/Spec_IBM_output/",four_letter_code,"_",run_date,"/",four_letter_code,"_best.rds",sep=""))
   
   ppo_pr <- postPriorOverlap(final_sim_set$start_date_u_s,compiled_df$start_date_u_s)
   
@@ -87,6 +87,11 @@ ax_lab <- as.character(c(1,1,2,2,3,3,6,6,7,7,8,8,9,10,10,12,12))
 
 spring_col <- "forestgreen"
 fall_col <- "tan3"
+
+spring_shp <- 19
+fall_shp <- 18
+both_shp <- 17
+
 fall_spring_cols <- c(spring_col,fall_col,
                       spring_col,fall_col,
                       spring_col,fall_col,
@@ -96,29 +101,40 @@ fall_spring_cols <- c(spring_col,fall_col,
                       "dodgerblue4",
                       spring_col,fall_col,
                       spring_col,fall_col)
+
+fall_spring_shape <- c(spring_shp,fall_shp,
+                       spring_shp,fall_shp,
+                       spring_shp,fall_shp,
+                       spring_shp,fall_shp,
+                       spring_shp,fall_shp,
+                       spring_shp,fall_shp,
+                       both_shp,
+                       spring_shp,fall_shp,
+                       spring_shp,fall_shp)
+
 cr <- c(brewer.pal(12,"Set3"),"black","forestgreen","firebrick3","dodgerblue4","orchid")
 
 par(mar=(c(6,4,2,2)))
-plot(x=NULL,y=NULL,xlim=c(0,1),ylim=c(1,17),yaxt="n",ylab="",xlab="PPO",cex.lab=1.65,cex.axis=1.65)
+plot(x=NULL,y=NULL,xlim=c(0,1),ylim=c(1,17),yaxt="n",ylab="",xlab="Prior-posterior overlap",cex.lab=1.65,cex.axis=1.65)
 #Guidelines
 abline(h=1:17,lty=2,lwd=2,col="grey80")
 par(las=1)
 axis(2,at=1:17,labels=rev(ax_lab),cex.lab=1.65,cex.axis=1.65)
 for (nn in rev(1:17)){
   print(nn)
-  points(all_spec_rec[,nn],18-rep(nn,length(all_spec_rec[,nn])),pch=19,col=alpha(fall_spring_cols[nn],.7),cex=2.5)
+  points(all_spec_rec[,nn],18-rep(nn,length(all_spec_rec[,nn])),pch=fall_spring_shape[nn],col=alpha(fall_spring_cols[nn],.7),cex=2.5)
   points(mean(all_spec_rec[,nn]),18-nn,pch="|",col=alpha("firebrick3",.8),cex=2)
 }
 
 #Add letters
-points(all_spec_rec[8,2],16,pch=19,col=alpha("grey75",1),cex=3)
-text(all_spec_rec[8,2]+.0015,16,"B",cex=1.25) #Start date, mean, fall VATH
+points(all_spec_rec[8,2],16,pch=fall_shp,col=alpha("grey75",1),cex=3)
+text(all_spec_rec[8,2]+.0015,16,"B",cex=1.15) #Start date, mean, fall VATH
 
-points(all_spec_rec[1,8],10,pch=19,col=alpha("grey75",1),cex=3)
-text(all_spec_rec[1,8]+.0015,10,"C",cex=1.25) #Flight distance, BRSP 
+points(all_spec_rec[1,8],10,pch=fall_shp,col=alpha("grey75",1),cex=3)
+text(all_spec_rec[1,8]+.0015,10,"C",cex=1.15) #Flight distance, BRSP 
 
-points(all_spec_rec[4,13],5,pch=19,col=alpha("grey75",1),cex=3)
-text(all_spec_rec[4,13]+.0015,5,"D",cex=1.25) # Migratory connectivity, Hooded Warbler
+points(all_spec_rec[4,13],5,pch=both_shp,col=alpha("grey75",1),cex=3)
+text(all_spec_rec[4,13]+.0015,5,"D",cex=1.15) # Migratory connectivity, Hooded Warbler
 
 # Plot 1 by 3 square plots of examples
 par(mfrow=c(3,1))

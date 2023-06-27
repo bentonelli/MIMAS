@@ -1,0 +1,63 @@
+# This parameter set is made to include the probable parameter ranges for any songbird
+# species. It is largely based on theoretical estimates, as well as the author's
+# judgement based on the parameter sets of other songbirds.
+# As such, the priors are intentionally broad.
+
+
+#Define species name
+species_target <- "Generic Songbird"
+
+# Defines variables for flight length
+#Mean daily flight speed, spring
+speed_mean_s <- rtruncnorm(1,a=0,mean=400,sd=200)
+
+#SD of daily flight speed, spring
+speed_sd_s <- rtruncnorm(1,a=0,mean=200,sd=200)
+
+#Mean daily flight speed, fall
+speed_mean_f <- rtruncnorm(1,a=0,mean=400,sd=200)
+
+#SD of daily flight speed, fall
+speed_sd_f <- rtruncnorm(1,a=0,mean=200,sd=200)
+
+#Migration start date programming  - as Julian day
+
+#Spring start date (constrained to Julian days). This varies among individuals
+# so all birds don't initiate migration on same date
+start_date_u_s <- rtruncnorm(1,a=1,b=365,mean=110,sd=60)
+
+#Spring migration dates standard deviation
+start_date_sd_s <- rtruncnorm(1,a=0,mean=30,sd=30)
+
+#Fall migration dates 
+start_date_u_f <- rtruncnorm(1,a=1,b=365,mean=230,sd=60)
+
+start_date_sd_f <- rtruncnorm(1,a=0,mean=30,sd=30)
+
+#Orientation parameters - means should be 0
+bear_err_mean_s <- rnorm(1,0,10)
+bear_err_sd_s <- rtruncnorm(1,a=0,mean=20,sd=20)
+bear_err_mean_f <- rnorm(1,0,10)
+bear_err_sd_f <- rtruncnorm(1,a=0,mean=20,sd=20)
+
+#Energetics info
+max_energy_s <- rtruncnorm(1,a=0,mean=5000,sd=2500)
+max_energy_f <- rtruncnorm(1,a=0,mean=5000,sd=2500)
+recovery_rate_s <- rtruncnorm(1,a=0,b=1,mean=.15,sd=.1)
+recovery_rate_f <- rtruncnorm(1,a=0,b=1,mean=.15,sd=.1)
+
+#Migration time max
+max_mig_time_s <- 150
+max_mig_time_f <- 150
+
+#Goal radius - how far from "home" does a bird need before it "snaps" to it's location
+goal_radius <- 100
+
+#Migratory connectivity - type and strength
+mig_con <- runif(1,-1,1)
+
+# Connection between breeding latitude and migration timing. 1 means a strong
+# correlation between early departures and higher breeding latitudes.
+migr_timing_lat_s <- runif(1,-1,1)
+migr_timing_lat_f <- runif(1,-1,1)
+

@@ -11,3 +11,5 @@ Contents --
 Scripts: Contains all scripts neccesary to download data, run the models, etc.
 
 Data: Contains storage for all data needed to run the models, including species files.
+
+[![DOI](https://zenodo.org/badge/504260484.svg)](https://zenodo.org/badge/latestdoi/504260484)

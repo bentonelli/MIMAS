@@ -1,0 +1,189 @@
+---
+title: "Getting Started with MIMAS"
+author: "Ben Tonelli"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+### What is MIMAS?
+
+Models for the Individual Movements of Avian Species (MIMAS) is a tool to create realistic models of bird movements across the annual cycle. MIMAS relies on individual-based models (IBMs), simulating the movement of individual birds as they move between breeding and wintering sites. MIMAS was built so that other scientists and practitioners can train and use models to answer questions related to bird behavior and broader ecological questions. You can read more about MIMAS in Tonelli et. al, 2023, MEE.
+
+### How is MIMAS used to get species-specific models?
+
+MIMAS relies on eBird Status and Trends relative abundance maps to train species-specific IBMs. How MIMAS does this  exactly is a longer discussion (see the paper), but the quick version is that MIMAS tries lots of different possible bird behavioral traits that could explain population-scale patterns by running tons of simulations, and then saves simulations that perform the best.
+
+The output of the MIMAS training process is a collection of thousands of parameter sets for species of interest, which can then be used downstream (by people like you!) to run new simulations. Having lots of parameter sets accounts for the uncertainty surrounding the behavioral traits that govern migration.
+
+MIMAS is currently trained for 10 species, listed below. The tutorial will only work (at present) for these 10 species. If there are other species that you are interested in seeing added to this list, please fill out this [form](https://forms.gle/V9bMdBqH7tpCkk8fA), or contact me directly. 
+
+1. Brewer's Sparrow (*Spizella breweri*)
+2. Bullock's Oriole (*Icterus bullockii*)
+3. Clay-colored Sparrow (*Spizella pallida*)
+4. Hooded Warbler (*Setophaga citrina*)
+5. Orchard Oriole (*Icterus spurius*)
+6. Red-naped Sapsucker (*Sphyrapicus nuchalis*)
+7. Townsend's Warbler (*Setophaga townsendi*)
+8. Varied Thrush (*Ixoreus naevius*)
+9. Wood Thrush (*Hylocichla mustelina*)
+10. Yellow-bellied Sapsucker (*Sphyrapicus varius*)
+
+### What can MIMAS do for you?
+
+Likely the most useful application of MIMAS is estimating migratory routes of individual birds of a given species. Running a simulation will give you the daily locations of a bunch of birds throughout the year. Below is a short walkthrough of how to get set up so that you can run simulations and extract information from those simulations.
+
+If this code is too complex or daunting for you to tackle, but you are interested in using these models for your research, please don't hesitate to reach out to me directly: btonelli (at) ucla [dot] edu. I would love to hear from you!
+
+# MIMAS Vignette
+#### Download MIMAS data, set working directory
+
+To download MIMAS, you'll need to navigate to the [github page](https://github.com/bentonelli/MIMAS) and [download it as a ZIP file](https://docs.github.com/en/repositories/working-with-files/using-files/downloading-source-code-archives) (or at least, that's the easiest way to get it). 
+
+Once you have it, you can open up the R package in R studio. Make sure your working fdirectoyy is the 
+
+
+#### Download eBird ST data
+
+To run the simulations, MIMAS IBMs need the relative abundance of a species at the breeding and wintering grounds. This will give the IBMs the range information necessary to run the simulations
+```{r,eval=FALSE}
+# Load the eBirdST and other necessary packages (make sure to install, if you don't have these already)
+library(ebirdst) 
+library(raster)
+library(sf)
+library(lubridate)
+library(readr)
+library(dplyr)
+
+#Get MIMAS functions
+source(file = "scripts/sim_functions/sim_funct.R")
+
+# Now we can download the breeding and wintering relative abundance maps for a particular species of interest from eBird
+# We don't want the error maps used for model training, so we can set the "with_error_maps" function to FALSE 
+# I'm sorry I can't provide this directly - if I did, I think Big Brother (Cornell Lab of Ornithology) would sue.
+
+# Be warned - this will take ~20 minutes to download and process all the data.
+# Luckily, you only need to do this once (for each species, that is!)
+spec_to_download <- "Townsend's Warbler"
+
+if(file.exists(paste("data/species_maps/breeding/",gsub(" ", "_", spec_to_download),"_breeding_all",sep="",".csv"))){
+  print("You are good to go!")
+} else {
+  get_spec_maps(spec_to_download,with_error_maps = FALSE)
+}
+```
+
+#### Running a simulation
+
+OK, now that the simulation has all the data it needs, we can run a simulation
+```{r}
+# Load necessary packages (make sure to install, if you don't have these already)
+library(ebirdst)
+library(lubridate)
+library(geosphere)
+library(dplyr)
+library(truncnorm)
+library(sf)
+library(spData)
+#Read in functions (you may have just done this in the last code block)
+source(file = "scripts/sim_functions/sim_funct.R")
+
+#Define species
+species_target <- "Townsend's Warbler"
+
+# Read in parameter set of trained simulations. Make sure to check out which species
+# have trained models. Also note these use species 4-letter codes.
+param_set <- readRDS("data/output/Spec_IBM_output/TOWA_9_20_22/TOWA_best.rds")
+
+# Check out the structure of this data frame: each row is an accepted simulation
+# Each row is a parameter value.
+head(param_set[,1:10])
+
+# We are going to pull one of these simulations/parameter sets at random to use,
+# and we are going to save these to the environment
+rand_sim <- sample(1:nrow(param_set),1)
+for (each_var in 1:ncol(param_set)){
+  assign(colnames(param_set)[each_var],param_set[rand_sim,each_var])
+}
+
+#Set number of birds to include in simulation, 1000 birds is a reasonable starting point
+num_pulls <- 1000
+
+#Set number of days to run the simulation for.
+num_days <- 365
+
+#Import breeding, non-breeding maps
+breeding_file <- read.csv(paste("data/species_maps/breeding/",gsub(" ","_",species_target),"_breeding_all.csv",sep=""))
+nonbreeding_file <- read.csv(paste("data/species_maps/non_breeding/",gsub(" ","_",species_target),"_non_breeding_all.csv",sep=""))
+
+#Define starting season, leave this at 1 (breeding season)
+season <- 1
+
+#We will set the start date as the midpoint of the breeding season.
+start_date <- (ebirdst_runs[which(ebirdst_runs$common_name==species_target),7:8])
+start_date <- as.numeric(start_date[1] + (start_date[2]-start_date[1])/2)
+start_date <- yday(as.Date(start_date,origin = "1970-01-01"))
+acceptable_week_dates <- seq(1,365,by=7)
+start_date <- acceptable_week_dates[which(abs(acceptable_week_dates - start_date) == min(abs(acceptable_week_dates - start_date)))]
+
+#Initialize model using parameters pulled above
+initial_dfs <- initialize_MIBM(num_pulls,breeding_file,nonbreeding_file,speed_mean_s,
+                               speed_sd_s,speed_mean_f,speed_sd_f,start_date_u_s,
+                               start_date_sd_s,start_date_u_f,start_date_sd_f,
+                               max_mig_time_s,max_mig_time_f,bear_err_mean_s,
+                               bear_err_sd_s,bear_err_mean_f,bear_err_sd_f,
+                               max_energy_s,max_energy_f,recovery_rate_s,
+                               recovery_rate_f,season,start_date,goal_radius,
+                               mig_con,migr_timing_lat_s,migr_timing_lat_f)
+
+# The IBMs rely on two dataframes - one that stays the same (Static) and the other
+# that updates based on the location, status of individual birds
+static_df <- initial_dfs[[1]]
+upd_df <- initial_dfs[[2]]
+
+#Set up a dataframe to record the locations of birds on each day
+locs_rec <- as.data.frame(matrix(NA,ncol = 5,nrow = (num_days*num_pulls)))
+colnames(locs_rec) <- c("ID","Lon","Lat","Day","Season")
+for (days in 1:num_days){
+  upd_df <- run_day(upd_df,static_df)
+  locs <- save_locations(upd_df,save_season = TRUE)
+  loc_ind_s <- (days - 1)*num_pulls + 1 
+  loc_ind_e <- (days - 1)*num_pulls + num_pulls 
+  locs_rec[loc_ind_s:loc_ind_e,] <- locs
+}
+head(locs_rec)
+```
+
+So now we have the locations of each simulated bird on each day. We can see what this looks like for a single bird. This code will plot species locations colored by season, with species.
+```{r}
+library(dplyr)
+library(ggplot2)
+single_bird <- locs_rec %>% filter(ID == 1)
+
+countries <- map_data("world")
+states <- map_data("state")
+countries <- countries %>% filter(long < -32)
+
+p <- ggplot() + coord_map("mollweide",xlim=c(-130,-80),ylim=c(15,70)) +
+  geom_polygon(data=countries, aes(x=long, y=lat, group=group), fill="grey90", color="darkgrey") +
+  geom_polygon(data=states, aes(x=long, y=lat, group=group), fill="grey90", color="darkgrey") +
+  geom_point(data=single_bird,aes(x=Lon,y=Lat,col=as.factor(Season))) +
+  scale_colour_manual(values=c("firebrick3","goldenrod2","skyblue3","seagreen"),
+                      labels=c("Breeding","Post-breeding migration","Wintering","Pre-breeding migration")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(axis.ticks.x = element_blank(),axis.text.x = element_blank(),
+        axis.ticks.y = element_blank(),axis.text.y = element_blank(),
+        axis.title.x=element_blank(),axis.title.y=element_blank(),
+        plot.margin = unit(c(0, 0, 0, 0), "null"),
+        panel.spacing = unit(c(0, 0, 0, 0), "null"),
+        legend.title=element_blank()) +
+  
+  theme(panel.background = element_rect(fill = alpha("lightskyblue2",.5)))
+print(p)
+```
+
+And

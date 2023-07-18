@@ -21,7 +21,7 @@ library(zoo)
 sf::sf_use_s2(FALSE)
 
 setwd("~/Documents/Coding/R/MIMAS/")
-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
+
 #Set seed
 set.seed(188)
 
@@ -216,7 +216,7 @@ mtext("", side = 4, line = 3)             # Add second axis label
 axis(1,                         # Define x-axis manually
      at = seq(30,700,by=60),
      labels = c("Aug","Oct","Dec","Feb","Apr","Jun","Aug","Oct","Dec","Feb","Apr","Jun"),las=2,cex.axis=1.65)
-legend("topright",inset=.02,c("% Migrating","% Change, Inf."),col=c("black","firebrick4"),lty=1,lwd=5,cex=1)
+legend("topright",inset=.02,c("% Migrating",expression(paste("% ",Delta," Inf.",sep=""))),col=c("black","firebrick4"),lty=1,lwd=5,cex=1)
 
 # Get sites of infections
 
@@ -408,20 +408,27 @@ for (day_target in seq(1,max(cl_sir$sim_days),by=14)){
 dev.off()
 
 #Plot with points
-#Location of birds on a single day
-loc_day <- filter(locs_rec_p,Day == 300)
-mappoints <- p + 
-  geom_point(data = loc_day,aes(x=Lon,y=Lat),color=alpha(loc_day$col,.7),size=2,pch=19)
-plot(mappoints)
+p <- ggplot() + coord_map("mollweide",xlim=c(-125,-70),ylim=c(15,65)) +
+  geom_polygon(data=countries, aes(x=long, y=lat, group=group), fill="lightgrey", color="darkgrey") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(axis.ticks.x = element_blank(),axis.text.x = element_blank(),
+        axis.ticks.y = element_blank(),axis.text.y = element_blank(),
+        axis.title.x=element_blank(),axis.title.y=element_blank())  +
+  scale_fill_gradient2(low="dodgerblue4", mid="grey",high="firebrick4",midpoint=0,limits=c(0,1))+ theme_bw()
+print(p)
 
 #Add column to adjust days
 locs_rec_p$adj_dates <- floor((as.numeric(rownames(locs_rec_p))-1)/2000)+1
 
 #Animate
-days_to_inc <- seq(from=1,to=365, by=3)
-loc_day <- filter(locs_rec_p, Day %in% days_to_inc)
+days_to_inc <- seq(from=1,to=730, by=7)
+loc_day <- filter(locs_rec_p, adj_dates %in% days_to_inc)
+
+mean_col <- c("firebrick2","skyblue2","black")
+loc_day$col <- mean_col[as.numeric(as.factor(loc_day$inf))]
+
 pp <- p +
-  geom_point(data = loc_day,aes(x=Lon,y=Lat,group=ID),color=alpha(loc_day$col,.7),size=2,pch=19)
+  geom_point(data = loc_day,aes(x=Lon,y=Lat,group=ID),color=alpha(loc_day$col,.6),size=1,pch=19)
 #plot(p)                  
 
 anim <- pp + 

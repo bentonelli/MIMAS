@@ -825,7 +825,7 @@ best_models <- function(sim_output_loc, perc_plus,total_sims){
 
 # This analysis function creates a pdf and csv file demonstrating the convergence 
 # (or lack therof) of each parameter.
-param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep=""),
+param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""),
                            num_sims_in_file=100,total_sims = 100000,buffer = .03){
   library(dplyr)
   library(ggplot2)
@@ -888,11 +888,11 @@ param_converge <- function(spec_abr,run_date,output_loc=paste("data/output/",spe
                                        "prior med. est","S1 med. est.","S2 med. est","2.5%",
                                        "97.5%","% Converg.")
   param_convergence_rec <- as.data.frame(param_convergence_rec)
-  write_csv(param_convergence_rec,paste(paste("data/output/",spec_abr,"_",run_date,"/param_convergence.csv",sep="")))
+  write_csv(param_convergence_rec,paste(paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,"/param_convergence.csv",sep="")))
 }
 
 #Code that extracts parameter sets associated with the best simulation runs
-best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep=""),
+best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""),
                       output_loc2 = paste("data/param_sets/",spec_abr,"/",run_date,sep=""),
                       num_sims_in_file=100,total_sims = 100000,buffer = .03){
   library(dplyr)
@@ -900,13 +900,13 @@ best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr
   print(paste(output_loc2,"/",spec_abr,"_S2.rds",sep=""))
   
   #If output folder doesn't exist, create one
-  if(!dir.exists(paste("data/output/",spec_abr,sep=""))){
-    dir.create(paste("data/output/",spec_abr,sep=""))
+  if(!dir.exists(paste("data/output/Spec_IBM_output/",spec_abr,sep=""))){
+    dir.create(paste("data/output/Spec_IBM_output/",spec_abr,sep=""))
   }
   
   #If output folder doesn't exist, create one
-  if(!dir.exists(paste("data/output/",spec_abr,"_",run_date,sep=""))){
-    dir.create(paste("data/output/",spec_abr,"_",run_date,sep=""))
+  if(!dir.exists(paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""))){
+    dir.create(paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""))
   }
   
   #Location of saved simulation files
@@ -922,17 +922,17 @@ best_sims <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr
 }
 
 #Code to create parameter correlation plot
-param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/",spec_abr,"_",run_date,sep=""),return_matrix=FALSE){
+param_corr <- function(spec_abr,run_date,output_loc=paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""),return_matrix=FALSE){
   # Script to compare parameter correlations across best fit models
   library(corrplot)
   
   #If output folder doesn't exist, create one
-  if(!dir.exists(paste("data/output/",spec_abr,"_",run_date,sep=""))){
-    dir.create(paste("data/output/",spec_abr,"_",run_date,sep=""))
+  if(!dir.exists(paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""))){
+    dir.create(paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,sep=""))
   }
   
   #Read in parameter set
-  fit_params <- readRDS(paste("data/output/",spec_abr,"_",run_date,"/",spec_abr,"_best.rds",sep=""))
+  fit_params <- readRDS(paste("data/output/Spec_IBM_output/",spec_abr,"_",run_date,"/",spec_abr,"_best.rds",sep=""))
   
   #plot(fit_params$speed_mean_s,fit_params$start_date_u_s,cex=.1)
   wanted_corr_params <- as.matrix(fit_params[,c(2:9,12:19,23:25)])
@@ -1146,3 +1146,109 @@ postPriorOverlap <-
     
     return(overlap)
   }
+
+# Code to get species maps
+
+get_spec_maps <- function(species_name,with_error_maps = TRUE){
+  
+  library(ebirdst)
+  library(terra)
+  library(sf)
+  library(lubridate)
+  library(readr)
+  library(dplyr)
+  
+  #Assign number of draws for weekly maps
+  num_draws <- 100000
+  
+  #Assign number of draws for each week of breeding, non-breeding season
+  num_draws_b_nb <- 1000000
+  
+  #Download data
+  sp_path <- ebirdst_download(species = species_name,pattern="abundance_median_hr",force = FALSE)
+  abunds <- load_raster("abundance", path = sp_path)
+  
+  breed_dates <- week(as.matrix(ebirdst_runs[which(ebirdst_runs$common_name==species_name),7:8]))
+  nbreed_dates <- week(as.matrix(ebirdst_runs[which(ebirdst_runs$common_name==species_name),11:12]))
+  
+  breed_weeks <- seq(from=breed_dates[1],to=breed_dates[2],by=1)
+  
+  #Non-breeding seasons go over the new year normally, so make the adjustment to get the right weeks here
+  if (nbreed_dates[1]>nbreed_dates[2]){
+    nbreed_weeks <- c(seq(from=nbreed_dates[1],to=52,by=1),seq(from=1,to=nbreed_dates[2],by=1))
+  } else {
+    nbreed_weeks <- seq(from=nbreed_dates[1],to=nbreed_dates[2],by=1)
+  }
+  
+  breed_points <- c()
+  nbreed_points <- c()
+  
+  #For each week, 
+  err_all_week <- list()
+  if (with_error_maps){
+    #Get all weeks
+    week_to_process <- 1:52
+  } else {
+    #This gets the breeeding and wintering weeks
+    week_to_process <- c(nbreed_weeks,breed_weeks)
+  }
+  
+  for (each_week in week_to_process){
+    print(each_week)
+    #Split to week
+    wk_abunds <- terra::trim(abunds[[each_week]])
+    
+    #Convert to csvs
+    abunds_vlow <- terra::project(wk_abunds, y = "epsg:4326")
+    rel_abd_vlow <- as.points(abunds_vlow)
+    rel_abd_vlow <- data.frame(geom(rel_abd_vlow),values(rel_abd_vlow)) %>% select(-c("geom","hole","part"))
+    
+    colnames(rel_abd_vlow)[1:3] <- c("Lon","Lat","abundance")
+    rel_abd_vlow$rel_abund <- rel_abd_vlow$abundance/(sum(rel_abd_vlow$abundance))
+    
+    # Draw 100k points for sample. These points are not populated equally among the 2.96km squared area
+    point_sample_index <- sample(1:nrow(rel_abd_vlow),num_draws,replace=TRUE,prob=rel_abd_vlow$rel_abund)
+    point_sample <- rel_abd_vlow[point_sample_index,1:2]
+    
+    #Save to csv
+    #write_csv(point_sample,paste("data/species_maps/weekly/",gsub(" ", "_", species_name),
+    #                             "/",gsub(" ", "_", species_name),"_Week_",each_week,sep="",".csv"))
+    err_all_week[[each_week]] <- point_sample
+    #Draw for the breeding, non-breeding maps, with
+    
+    #For weeks in breeding season, add to list
+    if (each_week %in% breed_weeks){
+      breed_points <- rbind(breed_points,rel_abd_vlow[point_sample_index,])
+    }
+    
+    if (each_week %in% nbreed_weeks){
+      nbreed_points <- rbind(nbreed_points,rel_abd_vlow[point_sample_index,])
+    }
+    
+  }
+  
+  # Convert breeding points to relative abundance
+  breed_group <- breed_points %>% 
+    group_by(Lon,Lat) %>% 
+    summarise(abundance = n())
+  breed_group <- as.data.frame(breed_group)
+  breed_group$perc_occupancy <- breed_group$abundance/sum(breed_group$abundance)
+  colnames(breed_group)[1:4] <- c("longitude","latitude","abundance","perc_occupancy")
+  
+  #Do the same for non-breeding
+  nbreed_group <- nbreed_points %>% 
+    group_by(Lon,Lat) %>% 
+    summarise(abundance = n())
+  nbreed_group <- as.data.frame(nbreed_group)
+  nbreed_group$perc_occupancy <- nbreed_group$abundance/sum(breed_group$abundance)
+  colnames(nbreed_group)[1:4] <- c("longitude","latitude","abundance","perc_occupancy")
+  
+  #Write both to csv format
+  write_csv(breed_group,paste("data/species_maps/breeding/",gsub(" ", "_", species_name),"_breeding_all",sep="",".csv"))
+  write_csv(nbreed_group,paste("data/species_maps/non_breeding/",gsub(" ", "_", species_name),"_non_breeding_all",sep="",".csv"))
+  
+  if(with_error_maps){
+    saveRDS(point_sample,paste("data/species_maps/error_maps/",gsub(" ", "_", species_name),"_s200.rds",sep=""))
+  }
+}
+
